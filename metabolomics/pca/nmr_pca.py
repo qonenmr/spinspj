@@ -1,33 +1,80 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Feb  6 23:25:01 2021
-
-@author: ThinkPad
-"""
-
-
-import numpy as np
+from command import spinspj
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+import numpy
+import os
+from pca import pcaUtils
 
-from command import spinspj 
+rootPath = os.getcwd()
+# Experiment folder
+folderPath = os.path.join(rootPath, r"./system/data/pyexample/pca/Proton_1D_RAW")
+# Spectral peak alignment interval file
+peakAligmentFile = os.path.join(rootPath, r"./system/data/pyexample/pca/configure/peakAligment")
+# Exclude integral interval file
+integralExcludeFile = os.path.join(rootPath, r"./system/data/pyexample/pca/configure/integralExclude")
 
-filePath = r".\system\data\pyexample\ST000101.txt"
-origin_data = spinspj.loadmetabolicdata(filePath,1,3);
-metaclasses = spinspj.loadmetaclass(filePath,1,2);
-samplenames = spinspj.loadmetasample(filePath,1,0,1);
+# Experiment file name
+fileList = os.listdir(folderPath)
+# Preliminary treatment
+specData = []	# Storing spectral data
+# Traverse experimental files
+for fileName in fileList:
+	# Splicing path
+	filePath = folderPath + r"/" + fileName
+	print("Processing：" + filePath)
+	# Set workspace
+	spinspj.setWs(filePath)
+	# Experimental treatment
+	spinspj.wft()	# Fourier
+	spinspj.aph()	# Phase correction
+	spinspj.abs()	# Baseline correction
+	spinspj.updateSpecShow()	# Update spectrum
+    # get spectrum data
+	specDataTmp=spinspj.getSpec()
+	for i in range(len(specDataTmp)):
+		specData.append(specDataTmp[i][0])
 
-data = np.array(origin_data)
-data = np.transpose(data)
+# Spectral peak alignment
+specData = pcaUtils.formatData(specData).tolist()
+peakAligment = pcaUtils.readPeakAligmentFile(peakAligmentFile)
+specData = spinspj.peaksAligment([3,0,1],specData,1,peakAligment)
+specData = pcaUtils.formatData(specData)
+
+# Set the spectrum and integrate
+centerFreq = []	# center frequency
+relIntensity = [] # Integral value
+for i in range(len(fileList)):
+	filePath = folderPath + r"/" + fileList[i]
+	print("Processing：" + filePath)
+	spinspj.setWs(filePath)
+	real, imag = pcaUtils.getRealImag(specData[i,:])
+	# Set new spectrum
+	spinspj.setSpec(real,imag)
+	spinspj.updateSpecShow()
+	exclude = pcaUtils.readBatchIntegrationFile(integralExcludeFile)
+	spinspj.batchIntegration([8.9604,-0.040229],exclude,2843,200000)
+	# Update integral
+	spinspj.updateIntegrationShow()
+	# get center frequency and integral value
+	centerFreq.append(spinspj.getCenterFreqOfIntegrals())
+	relIntensity.append(spinspj.getRefValueOfIntegrals())
+# normalization
+pcaData = pcaUtils.normalization(relIntensity)
+
+#Uncomment following 2 lines to get exact the same result of the website
+# filePath = r"./system/data/pyexample/ST000101.txt"
+# pcaData = spinspj.loadmetabolicdata(filePath,1,3);
+
+data = numpy.transpose(pcaData)
 rownum = data.shape[0]
 colnum = data.shape[1]
 
 for k in range(rownum):
-    m=np.mean(data[k,:])
-    stddata = np.std(data[k,:])
+    m=numpy.mean(data[k,:])
+    stddata = numpy.std(data[k,:])
     data[k,:] = (data[k,:] - m)/stddata
 
-data2 = np.transpose(data)    
+data2 = numpy.transpose(data)    
 pca1=PCA(n_components=8)
 newData=pca1.fit(data2)
 print(pca1.explained_variance_ratio_)
@@ -42,7 +89,6 @@ plt.ylabel('R2X')
 plt.title('principal component analysis')
 plt.show()
 
-
 plt.figure(2)
 fitted_data = pca1.fit_transform(data.T)        # numpy.ndarray
 plt.scatter(fitted_data[:, 0], -fitted_data[:, 1],marker='x')
@@ -52,7 +98,8 @@ for i in range(1,6):
 for i in range(1,6):
     plt.annotate("Mixture A" + str(i), xy=(fitted_data[:, 0][i+4]+2, -fitted_data[:, 1][i+4]), color='red')
 
-
+plt.xlim((-50,80))
+plt.ylim((-50,30))
 plt.xlabel('PC 1')
 plt.ylabel('PC 2')
 plt.title('score scatter plot')
