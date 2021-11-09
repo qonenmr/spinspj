@@ -3,19 +3,20 @@
 from command import spinspj
 import numpy as np
 
-#set active workspace
-path=spinspj.getExamplePath()+'automation.nmr'
-spinspj.setWs(path)
+spinspj.setActiveWs()
 spinspj.aij(2)#Inject sample 2
+print('Sample 2 has been injected.\n')
 spinspj.setsolvent('D2O')#Set the solvent of sample 2
+print('Solvent has been set to D2O.\n')
 spinspj.stm('H1')#Automatic tuning and matching
-spinspj.smartmapshim3d('H1',15,20,200)#3D gradient shimming
+print('Smart tuning and matching is over.\n')
+spinspj.smartmapshim(2000)#1D gradient shimming
+print('Smart gradient shimming is over.\n')
 spinspj.alock()#Automatic locking
+print('Automatic locking is over.\n')
 spinspj.go()#Acquisition
+print('Data acquisition is over.\n')
 spinspj.wft()#Window + FFT
-spec = spinspj.getSpec()#Read spectrum data
 fid = spinspj.getFid()#Read FID data
-x = np.array(spec)#Transform spectrum data as ndarray
-y = np.array(fid)#Transform FID data as ndarray
+spec = spinspj.getSpec()#Read spectrum data
 spinspj.updateSpecShow()#Update the display of spectrum data
-spinspj.openWs()
